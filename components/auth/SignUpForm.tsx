@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useSignUp } from "@clerk/nextjs";
+import { useAuth, useSignUp } from "@clerk/nextjs";
 
 import { AuthShell } from "./AuthShell";
 import { AuthField } from "./AuthField";
@@ -13,6 +13,8 @@ import { clerkErrorMessage } from "@/lib/auth/clerk-errors";
 
 export function SignUpForm() {
   const { signUp } = useSignUp();
+  // `isLoaded` lives on useAuth(), not the signals hooks.
+  const { isLoaded, isSignedIn } = useAuth();
   const router = useRouter();
 
   const [phase, setPhase] = useState<"details" | "verify">("details");
@@ -24,9 +26,20 @@ export function SignUpForm() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // See SignInForm: `/sign-up` is public, so send an already-authenticated
+  // visitor home, and catch the post-`finalize()` case where Clerk's own
+  // `navigate` callback never fires.
+  useEffect(() => {
+    if (isSignedIn) {
+      router.replace("/");
+      router.refresh();
+    }
+  }, [isSignedIn, router]);
+
   const startSignUp = async (e: FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
+    // `signUp` is undefined until Clerk's JS has loaded.
+    if (!isLoaded || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -55,7 +68,7 @@ export function SignUpForm() {
   };
 
   const submitCode = async (value: string) => {
-    if (submitting) return;
+    if (!isLoaded || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -69,7 +82,7 @@ export function SignUpForm() {
       }
       const { error: finErr } = await signUp.finalize({
         navigate: () => {
-          router.push("/");
+          router.replace("/");
           router.refresh();
         },
       });
@@ -110,7 +123,7 @@ export function SignUpForm() {
             <div className="text-[13px] font-semibold text-rust">{error}</div>
           )}
 
-          <PillButton fullWidth disabled={submitting || code.length < 6}>
+          <PillButton fullWidth disabled={submitting || !isLoaded || code.length < 6}>
             {submitting ? "Verifying…" : "Verify & continue"}
           </PillButton>
         </form>
@@ -191,7 +204,7 @@ export function SignUpForm() {
         {/* Clerk Smart CAPTCHA mounts here (bot protection on sign-up). */}
         <div id="clerk-captcha" />
 
-        <PillButton fullWidth disabled={submitting}>
+        <PillButton fullWidth disabled={submitting || !isLoaded}>
           {submitting ? "Creating account…" : "Create account"}
         </PillButton>
       </form>
