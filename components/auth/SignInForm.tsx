@@ -10,6 +10,23 @@ import { AuthField } from "./AuthField";
 import { PillButton } from "@/components/ui/PillButton";
 import { clerkErrorMessage } from "@/lib/auth/clerk-errors";
 
+const GENERIC_NEXT_STEP =
+  "This account needs an extra verification step that isn't supported here yet.";
+
+// Statuses other than `complete` mean the sign-in needs another factor before a
+// session exists. Keyed loosely so a new Clerk status falls back to the generic
+// message rather than rendering `undefined`.
+const NEXT_STEP_MESSAGE: Record<string, string> = {
+  needs_second_factor:
+    "Two-factor authentication is required for this account, which isn't supported here yet.",
+  needs_new_password:
+    "Your password must be reset before you can sign in. Use “Forgot password” to set a new one.",
+  needs_client_trust:
+    "This device needs to be verified first. Check your email for a verification request.",
+  needs_first_factor: "That email and password didn't match. Please try again.",
+  needs_identifier: "Please enter the email address for your account.",
+};
+
 export function SignInForm() {
   const { signIn } = useSignIn();
   // `isLoaded` lives on useAuth(), not the signals hooks.
@@ -50,6 +67,24 @@ export function SignInForm() {
         setError(clerkErrorMessage(pwErr));
         return;
       }
+
+      // A session is already active on this client, so Clerk reports it rather
+      // than creating a new one — `createdSessionId` stays null and finalize()
+      // fails with "Cannot finalize sign-in without a created session". There's
+      // nothing to finalize; the user is signed in, so just go to the app.
+      if (signIn.existingSession) {
+        router.replace("/");
+        router.refresh();
+        return;
+      }
+
+      // Only `complete` yields a session to finalize. Every other status needs a
+      // step this form doesn't implement, so say which one instead of throwing.
+      if (signIn.status !== "complete") {
+        setError(NEXT_STEP_MESSAGE[signIn.status] ?? GENERIC_NEXT_STEP);
+        return;
+      }
+
       const { error: finErr } = await signIn.finalize({
         navigate: () => {
           // `replace`, not `push` — going Back to the sign-in form after

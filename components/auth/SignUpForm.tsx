@@ -80,6 +80,21 @@ export function SignUpForm() {
         setCode(""); // clear the boxes so they can retype
         return;
       }
+      // Same guard as SignInForm: with a session already active Clerk reports
+      // it instead of creating one, so there is nothing to finalize and the
+      // call fails with "without a created session".
+      if (signUp.existingSession) {
+        router.replace("/");
+        router.refresh();
+        return;
+      }
+      if (signUp.status !== "complete") {
+        setError(
+          "Your account still needs a few details before it can be created."
+        );
+        return;
+      }
+
       const { error: finErr } = await signUp.finalize({
         navigate: () => {
           router.replace("/");
