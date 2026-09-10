@@ -43,6 +43,11 @@ export function SignUpForm() {
     setSubmitting(true);
     setError(null);
     try {
+      // Discard any leftover attempt so a previous failure's status doesn't
+      // carry into this one. Only safe in this first phase — doing it in
+      // `submitCode` would throw away the pending email verification.
+      await signUp.reset();
+
       // Create the sign-up with name + email + password, then send the code.
       const { error: pwErr } = await signUp.password({
         firstName: firstName.trim(),

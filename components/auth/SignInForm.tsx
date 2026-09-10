@@ -18,7 +18,7 @@ const GENERIC_NEXT_STEP =
 // message rather than rendering `undefined`.
 const NEXT_STEP_MESSAGE: Record<string, string> = {
   needs_second_factor:
-    "Two-factor authentication is required for this account, which isn't supported here yet.",
+    "This account needs a second verification step, which isn't supported here yet.",
   needs_new_password:
     "Your password must be reset before you can sign in. Use “Forgot password” to set a new one.",
   needs_client_trust:
@@ -58,6 +58,13 @@ export function SignInForm() {
     setSubmitting(true);
     setError(null);
     try {
+      // Clerk keeps one sign-in attempt per client, and a previous failed
+      // attempt leaves its status behind — which made every later submit
+      // inherit that stale state instead of starting fresh. `reset()` clears
+      // local state only (no API call), so this is cheap. Safe here because
+      // this form is a single password step with nothing in-flight to lose.
+      await signIn.reset();
+
       // Submit the password; on success, finalize() activates the session.
       const { error: pwErr } = await signIn.password({
         identifier: email.trim(),
@@ -81,7 +88,11 @@ export function SignInForm() {
       // Only `complete` yields a session to finalize. Every other status needs a
       // step this form doesn't implement, so say which one instead of throwing.
       if (signIn.status !== "complete") {
-        setError(NEXT_STEP_MESSAGE[signIn.status] ?? GENERIC_NEXT_STEP);
+        // Include the raw status — these are rare enough that naming the state
+        // is worth more than a tidy sentence when something needs diagnosing.
+        setError(
+          `${NEXT_STEP_MESSAGE[signIn.status] ?? GENERIC_NEXT_STEP} (status: ${signIn.status})`
+        );
         return;
       }
 
