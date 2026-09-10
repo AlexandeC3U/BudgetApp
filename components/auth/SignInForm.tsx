@@ -88,10 +88,16 @@ export function SignInForm() {
       // Only `complete` yields a session to finalize. Every other status needs a
       // step this form doesn't implement, so say which one instead of throwing.
       if (signIn.status !== "complete") {
-        // Include the raw status — these are rare enough that naming the state
-        // is worth more than a tidy sentence when something needs diagnosing.
+        // Name the state, and for a pending second factor name the strategies
+        // Clerk will accept — that's what identifies which factor is enrolled.
+        const factors = signIn.supportedSecondFactors
+          ?.map((f) => f.strategy)
+          .join(", ");
         setError(
-          `${NEXT_STEP_MESSAGE[signIn.status] ?? GENERIC_NEXT_STEP} (status: ${signIn.status})`
+          [
+            NEXT_STEP_MESSAGE[signIn.status] ?? GENERIC_NEXT_STEP,
+            `(status: ${signIn.status}${factors ? `; accepts: ${factors}` : ""})`,
+          ].join(" ")
         );
         return;
       }
